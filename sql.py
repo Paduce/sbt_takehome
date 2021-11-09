@@ -40,38 +40,40 @@ for i in protocols:
     # Load price and mcap raw data from glassnode API, and insert it in the main DF
     price = json.loads(cursor.execute(f"SELECT json(price) FROM glassnode WHERE id='{i}'").fetchall()[0][0])
     price = pd.DataFrame(price)
+    price.set_index(pd.to_datetime(price['t']).dt.date,inplace=True)
     mcap = json.loads(cursor.execute(f"SELECT json(mcap) FROM glassnode WHERE id='{i}'").fetchall()[0][0])
     mcap = pd.DataFrame(mcap)
-    mcap['t'] = pd.to_datetime(mcap['t'])
-    price['t'] = pd.to_datetime(price['t'])
+    mcap.set_index(pd.to_datetime(mcap['t']).dt.date,inplace=True)
+    TVL[f'{i}'].set_index(TVL[f'{i}']['date'].dt.date,inplace=True)
     TVL[f'{i}']['mcap'] = mcap['v']
     TVL[f'{i}']['price'] = price['v']
+    TVL[f'{i}'] = TVL[f'{i}'][TVL[f'{i}'].price.first_valid_index():]
+    TVL[f'{i}'].drop(columns=['date'],inplace=True)
 
     # Clean the data, remove NA, fill the data by interpolating
     TVL[f'{i}'] = TVL[f'{i}'].fillna(method='ffill')
-    TVL[f'{i}']['date'] = (TVL[f'{i}']['date'] - dt.datetime(1970,1,1)).dt.total_seconds()
     TVL[f'{i}']['ratio'] = TVL[f'{i}']['totalLiquidityUSD']/TVL[f'{i}']['mcap']
     TVL[f'{i}'] = TVL[f'{i}'].round(3)
     TVL[f'{i}'].replace(0, np.nan, inplace=True)
     TVL[f'{i}'] = TVL[f'{i}'].interpolate(method='linear')
 
     # Add rolling correlation
-    TVL[f'{i}']['change'] = TVL[f'{i}']['ratio'].pct_change(60)
-    TVL[f'{i}']['date'] = pd.to_datetime(TVL[f'{i}']['date'],unit='s').dt.date
-    TVL[f'{i}']['corr'] = TVL[f'{i}']['totalLiquidityUSD'].rolling(100).corr(TVL[f'{i}']['price'] )
+    TVL[f'{i}']['change'] = TVL[f'{i}']['ratio'].pct_change(10)
+    TVL[f'{i}']['corr'] = TVL[f'{i}']['totalLiquidityUSD'].rolling(10).corr(TVL[f'{i}']['price'] )
 
 # Add ranking over time
 df = pd.concat(TVL).reset_index()
 df['rank'] = df.groupby(['date'])['ratio'].rank("dense",ascending=False)
+df.set_index('date',inplace=True)
 
 # Plot everything
-fig1 = px.area(df,x='date',y='ratio',color='level_0',labels={'level_0':'Protocols'})
-fig2 = px.line(df,x='date',y='corr',color='level_0',labels={'level_0':'Protocols'})
-fig3 = px.line(df,x='date',y='rank',color='level_0',labels={'level_0':'Protocols'})
+fig1 = px.area(df,x=df.index,y='ratio',color='level_0',labels={'level_0':'Protocols'})
+fig2 = px.line(df,x=df.index,y='corr',color='level_0',labels={'level_0':'Protocols'})
+fig3 = px.line(df,x=df.index,y='rank',color='level_0',labels={'level_0':'Protocols'})
 fig3.update_yaxes(autorange="reversed")
 
 # This line wasn't asked but it gives information about the pct change of the ratio
-fig4 = px.line(df,x='date',y='change',color='level_0',labels={'level_0':'Protocols'})
+fig4 = px.line(df,x=df.index,y='change',color='level_0',labels={'level_0':'Protocols'})
 
 # Finally create the dash app to display all the data, no data range is needed because Plotly let the user zoom over
 # the desired data ranges
