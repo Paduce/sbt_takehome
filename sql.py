@@ -52,10 +52,11 @@ for i in protocols:
 
     # Clean the data, remove NA, fill the data by interpolating
     TVL[f'{i}'] = TVL[f'{i}'].fillna(method='ffill')
-    TVL[f'{i}']['ratio'] = TVL[f'{i}']['totalLiquidityUSD']/TVL[f'{i}']['mcap']
-    TVL[f'{i}'] = TVL[f'{i}'].round(3)
     TVL[f'{i}'].replace(0, np.nan, inplace=True)
     TVL[f'{i}'] = TVL[f'{i}'].interpolate(method='linear')
+    TVL[f'{i}']['ratio'] = TVL[f'{i}']['totalLiquidityUSD']/TVL[f'{i}']['mcap']
+    TVL[f'{i}'] = TVL[f'{i}'].round(3)
+
 
     # Add rolling correlation
     TVL[f'{i}']['change'] = TVL[f'{i}']['ratio'].pct_change(10)
